@@ -153,7 +153,7 @@ void drawMiniDial(Adafruit_GC9A01A &tft, const GaugeUI &g, const char* title) {
   }
 
   tft.setTextSize(1);
-  tft.setTextColor(FG, BG);
+  tft.setTextColor(TICK, BG);
 
   int16_t bx, by; uint16_t bw, bh;
   tft.getTextBounds(title, 0, 0, &bx, &by, &bw, &bh);
@@ -204,42 +204,37 @@ void clearTextPage(Adafruit_GC9A01A &tft) {
   tft.drawCircle(120, 120, 114, TICK);
 }
 
-void drawTextMetric(Adafruit_GC9A01A &tft, int x, int y, MetricId id, float v) {
-  tft.setTextColor(FG, BG);
-
-  tft.setTextSize(2);
-  tft.setCursor(x, y);
-  tft.print(specs[id].name);
-
-  tft.setTextSize(3);
-  tft.setCursor(x, y + 22);
-
-  char buf[32];
-  bool oneDec = (id == M_VOLT) || (id == M_LPER100);
-  if (oneDec) snprintf(buf, sizeof(buf), "%.1f %s", v, specs[id].unit);
-  else        snprintf(buf, sizeof(buf), "%.0f %s", v, specs[id].unit);
-  tft.print(buf);
-}
-
 void drawTextMetricFixed(Adafruit_GC9A01A &tft, int x, int y, MetricId id, float v) {
-  // lable is printed once in drawPageBackgrounds
-  tft.setTextSize(3);
-  tft.setTextColor(FG, BG);
-
+  // label printed once elsewhere
   int vx = x;
   int vy = y + 22;
-  tft.setCursor(vx, vy);
 
   char buf[32];
 
-  if (id == M_VOLT || id == M_LPER100) {
+  // fuel line slightly smaller so "L/100" fits
+  if (id == M_LPER100) {
+    tft.setTextSize(2);            // smaller
+    tft.setTextColor(FG, BG);
+    tft.setCursor(vx, vy + 4);     // alignment
+    snprintf(buf, sizeof(buf), "%5.1f %-5s", v, specs[id].unit); // tighter unit width
+    tft.print(buf);
+    return;
+  }
+
+  // default for other values
+  tft.setTextSize(3);
+  tft.setTextColor(FG, BG);
+
+  tft.setCursor(vx, vy);
+
+  if (id == M_VOLT) {
     snprintf(buf, sizeof(buf), "%6.1f %-6s", v, specs[id].unit);
   } else {
     snprintf(buf, sizeof(buf), "%6.0f %-6s", v, specs[id].unit);
   }
-
   tft.print(buf);
 }
+
 
 
 // random demo values
