@@ -23,6 +23,12 @@ const uint32_t TEXT_UPDATE_MS = 400;
 Adafruit_GC9A01A tft1(CS1, DC1, RST1);
 Adafruit_GC9A01A tft2(CS2, DC2, RST2);
 
+
+bool blinkOn = true;
+uint32_t lastBlinkMs = 0;
+const uint32_t BLINK_MS = 400;
+
+
 // colors
 uint16_t BG = GC9A01A_BLACK;
 uint16_t FG = GC9A01A_WHITE;
@@ -37,11 +43,13 @@ uint16_t THEME_N1, THEME_N2, THEME_N3, THEME_N4;
 // helpers
 static inline float deg2rad(float d){ return d * 0.0174532925f; }
 
-
 struct Theme {
   uint16_t bg, fg, tick;
   uint16_t n1, n2, n3, n4;
 };
+
+
+
 
 Theme THEMES[] = {
   { GC9A01A_BLACK, 0x07E0 /*GREEN*/, 0x03E0, 0x07E0, 0x07E0, 0x07E0, 0x07E0 },
@@ -56,6 +64,9 @@ Theme THEMES[] = {
 
 int themeIndex = 2;
 
+// Text page layout tuning
+const int TXT1_X = 30;     // move text inward from left edge
+const int TXT1_Y_SHIFT = 20; // move everything down (toward center)
 
 // Dial orientation calibration (degrees) -- tweak by 90 until matches your physical mount
 float DIAL_OFFSET_1 = 270;     // for tft1
@@ -64,6 +75,13 @@ float DIAL_OFFSET_2 = 270;     // for tft2
 // If ticks look mirrored (left-right), set to true
 bool DIAL_MIRROR_1 = false;
 bool DIAL_MIRROR_2 = false;
+
+void updateBlink(uint32_t now) {
+  if (now - lastBlinkMs >= BLINK_MS) {
+    lastBlinkMs = now;
+    blinkOn = !blinkOn;
+  }
+}
 
 
 
@@ -106,7 +124,8 @@ enum MetricId : uint8_t {
   M_IAT,
   M_BOOST_PSI,
   M_LPER100,
-  M_HP
+  M_HP,
+  M_RPM
 };
 
 struct MetricSpec {
@@ -117,14 +136,16 @@ struct MetricSpec {
 };
 
 MetricSpec specs[] = {
-  {"Coolant", "C",      0, 120},
-  {"Oil",     "C",      0, 150},
+  {"Coolant", "C",      0, 110},
+  {"Oil",     "C",      0, 110},
   {"Volt",    "V",     10, 15},
   {"Load",    "%",      0, 100},
   {"IAT",     "C",    -10, 80},
   {"Boost",   "psi",  -15, 20},
   {"Fuel",    "L/100",  0, 30},
-  {"HP",      "hp",     0, 200},
+  {"HP",      "hp",     0, 82},
+  {"RPM", "rpm", 0, 8000},
+
 };
 
 // mini gauge ui elems
@@ -147,6 +168,43 @@ GaugeUI g2a = {120,  62, 52, 40, 32, 2, NEEDLE_CYAN,   NAN, M_VOLT};    // tft2 
 GaugeUI g2b = {120, 178, 52, 40, 32, 2, NEEDLE_GREEN,  NAN, M_LOAD};    // tft2 bottom
 
 
+uint16_t colorForMetric(MetricId id, float v) {
+  switch (id) {
+    case M_BOOST_PSI:
+      if (v < 0) return GC9A01A_CYAN;       // vacuum
+      if (v < 8) return GC9A01A_YELLOW;
+      return GC9A01A_RED;
+
+    case M_IAT:
+      if (v < 30) return GC9A01A_CYAN;
+      if (v < 55) return FG;
+      return GC9A01A_RED;
+
+    case M_LPER100:
+      if (v < 7)  return 0x07E0;            // green
+      if (v < 12) return GC9A01A_YELLOW;
+      return GC9A01A_RED;
+    
+    case M_RPM:
+      if (v < 3000) return FG;
+      return GC9A01A_RED;
+    
+    case M_HP:
+      if (v < 30) return FG;
+      if (v < 55) return GC9A01A_YELLOW;
+      return GC9A01A_RED;
+
+    default:
+      return FG;
+  }
+}
+
+void redrawOuterRing(Adafruit_GC9A01A &tft) {
+  tft.drawCircle(120, 120, 115, TICK);
+  tft.drawCircle(120, 120, 114, TICK);
+}
+
+
 void applyNeedleColorsToGauges() {
   g1a.needleColor = THEME_N1;
   g1b.needleColor = THEME_N2;
@@ -154,6 +212,28 @@ void applyNeedleColorsToGauges() {
   g2b.needleColor = THEME_N4;
 }
 
+void drawValueOnly(Adafruit_GC9A01A &tft, int x, int y, MetricId id, float v, uint8_t textSize, bool blink) {
+  uint16_t col = colorForMetric(id, v);
+  if (blink && !blinkOn) col = TICK; // blink off
+
+  tft.setTextSize(textSize);
+  tft.setTextColor(col, BG);
+  tft.setCursor(x, y);
+
+  char buf[32];
+
+  // fixed-width -- change cleanly
+  if (id == M_LPER100) {
+    snprintf(buf, sizeof(buf), "%5.1f %-4s", v, specs[id].unit); // keep short
+  } else if (id == M_VOLT) {
+    snprintf(buf, sizeof(buf), "%5.1f %-2s", v, specs[id].unit);
+  } else if (id == M_RPM) {
+    snprintf(buf, sizeof(buf), "%5.0f   ", v); // no unit (label already says RPM)
+  } else {
+    snprintf(buf, sizeof(buf), "%5.0f %-3s", v, specs[id].unit);
+  }
+  tft.print(buf);
+}
 
 // drawing on screens
 void drawMiniDial(Adafruit_GC9A01A &tft, const GaugeUI &g, const char* title, float offsetDeg, bool mirror)
@@ -233,33 +313,29 @@ void clearTextPage(Adafruit_GC9A01A &tft) {
 }
 
 void drawTextMetricFixed(Adafruit_GC9A01A &tft, int x, int y, MetricId id, float v) {
-  // label printed once elsewhere
+  // label (static, muted)
+  tft.setTextSize(2);
+  tft.setTextColor(TICK, BG);
+  tft.setCursor(x, y);
+  tft.print(specs[id].name);
+
+  // value (colored)
+  uint16_t valColor = colorForMetric(id, v);
+  tft.setTextSize(3);
+  tft.setTextColor(valColor, BG);
+
   int vx = x;
   int vy = y + 22;
+  tft.setCursor(vx, vy);
 
   char buf[32];
 
-  // fuel line slightly smaller so "L/100" fits
-  if (id == M_LPER100) {
-    tft.setTextSize(2);            // smaller
-    tft.setTextColor(FG, BG);
-    tft.setCursor(vx, vy + 4);     // alignment
-    snprintf(buf, sizeof(buf), "%5.1f %-5s", v, specs[id].unit); // tighter unit width
-    tft.print(buf);
-    return;
-  }
-
-  // default for other values
-  tft.setTextSize(3);
-  tft.setTextColor(FG, BG);
-
-  tft.setCursor(vx, vy);
-
-  if (id == M_VOLT) {
-    snprintf(buf, sizeof(buf), "%6.1f %-6s", v, specs[id].unit);
+  if (id == M_VOLT || id == M_LPER100) {
+    snprintf(buf, sizeof(buf), "%4.1f %-6s", v, specs[id].unit);
   } else {
     snprintf(buf, sizeof(buf), "%6.0f %-6s", v, specs[id].unit);
   }
+
   tft.print(buf);
 }
 
@@ -282,7 +358,9 @@ float getMetricValue(MetricId id, uint32_t nowMs) {
     case M_IAT:       return 25 + (1-ease)*12;
     case M_BOOST_PSI: return boost_psi;
     case M_LPER100:   return 4 + ease * 18;
-    case M_HP:        return ease * 120;
+    case M_HP:        return ease * 82;
+    case M_RPM: return 800 + ease * 5200; // 
+
   }
   return 0;
 }
@@ -306,13 +384,14 @@ void drawPageBackgrounds() {
     clearTextPage(tft1);
     clearTextPage(tft2);
   
-    tft1.setTextSize(2); tft1.setTextColor(FG, BG);
-    tft1.setCursor(65, 15); tft1.print("PERF/ECO");
-    tft1.setCursor(25, 55);  tft1.print("Boost");
-    tft1.setCursor(25, 140); tft1.print("IAT");
-  
-    tft2.setTextSize(2); tft2.setTextColor(FG, BG);
-    tft2.setCursor(65, 15); tft2.print("PERF/ECO");
+    tft1.setTextSize(2); 
+    tft1.setTextColor(TICK, BG);
+    tft1.setCursor(TXT1_X, 35 + TXT1_Y_SHIFT);   tft1.print("RPM");
+    tft1.setCursor(TXT1_X, 95 + TXT1_Y_SHIFT);   tft1.print("Boost");
+    tft1.setCursor(TXT1_X, 155 + TXT1_Y_SHIFT);  tft1.print("IAT");
+
+    tft2.setTextSize(2); 
+    tft2.setTextColor(TICK, BG);
     tft2.setCursor(25, 55);  tft2.print("Fuel");
     tft2.setCursor(25, 140); tft2.print("HP");
   }
@@ -340,7 +419,7 @@ void setup() {
   pinMode(CS2, OUTPUT); digitalWrite(CS2, HIGH);
 
   SPI.begin();
-  SPI.setFrequency(20000000); // if glitchy: 10000000
+  SPI.setFrequency(8000000); // if glitchy: 8000000
 
   tft1.begin(); tft1.setRotation(0);
   tft2.begin(); tft2.setRotation(0);
@@ -354,7 +433,7 @@ void setup() {
 
 void loop() {
   uint32_t now = millis();
-
+  updateBlink(now);
   if (now - lastPageMs >= PAGE_MS) {
     page = (page + 1) % 2;
     lastPageMs = now;
@@ -378,17 +457,25 @@ void loop() {
     if (now - lastTextUpdateMs < TEXT_UPDATE_MS) return;
     lastTextUpdateMs = now;
 
+    float rpm   = getMetricValue(M_RPM, now);
     float boost = getMetricValue(M_BOOST_PSI, now);
     float iat   = getMetricValue(M_IAT, now);
     float l100  = getMetricValue(M_LPER100, now);
     float hp    = getMetricValue(M_HP, now);
 
-    // Left TFT: Boost + IAT
-    drawTextMetricFixed(tft1, 25, 55,  M_BOOST_PSI, boost);
-    drawTextMetricFixed(tft1, 25, 140, M_IAT,       iat);
+  // blink conditions
+    bool rpmBlink = (rpm >= 3000);
+    bool oilBlink = false;
+    // LEFT: rpm +  Boost + IAT
+    drawValueOnly(tft1, TXT1_X, 60  + TXT1_Y_SHIFT, M_RPM,      rpm,   3, rpmBlink);
+    drawValueOnly(tft1, TXT1_X, 120 + TXT1_Y_SHIFT, M_BOOST_PSI,boost, 2, false);
+    drawValueOnly(tft1, TXT1_X, 170 + TXT1_Y_SHIFT, M_IAT,      iat,   2, false);
+    redrawOuterRing(tft1);
 
-    // Right TFT: Fuel + HP
+
+    // Right: Fuel + HP
     drawTextMetricFixed(tft2, 25, 55,  M_LPER100, l100);
     drawTextMetricFixed(tft2, 25, 140, M_HP,      hp);
+    redrawOuterRing(tft2);
   }
 }
