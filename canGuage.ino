@@ -56,6 +56,17 @@ Theme THEMES[] = {
 
 int themeIndex = 2;
 
+
+// Dial orientation calibration (degrees) -- tweak by 90 until matches your physical mount
+float DIAL_OFFSET_1 = 270;     // for tft1
+float DIAL_OFFSET_2 = 270;     // for tft2
+
+// If ticks look mirrored (left-right), set to true
+bool DIAL_MIRROR_1 = false;
+bool DIAL_MIRROR_2 = false;
+
+
+
 void applyTheme(int idx) {
   Theme &th = THEMES[idx % (sizeof(THEMES)/sizeof(THEMES[0]))];
 
@@ -69,6 +80,13 @@ void applyTheme(int idx) {
   THEME_N4 = th.n4;
 }
 
+
+float applyDialTransform(float angleDeg, float offsetDeg, bool mirror) {
+  // mirror flips left/right around the vertical axis
+  if (mirror) angleDeg = -angleDeg;
+  angleDeg += offsetDeg;
+  return angleDeg;
+}
 
 
 // angle convention: -135° (left) to +135° (right)
@@ -138,12 +156,14 @@ void applyNeedleColorsToGauges() {
 
 
 // drawing on screens
-void drawMiniDial(Adafruit_GC9A01A &tft, const GaugeUI &g, const char* title) {
+void drawMiniDial(Adafruit_GC9A01A &tft, const GaugeUI &g, const char* title, float offsetDeg, bool mirror)
+  {
   tft.drawCircle(g.cx, g.cy, g.r_out, FG);
   tft.drawCircle(g.cx, g.cy, g.r_out - 1, FG);
 
   for (int d = -135; d <= 135; d += 20) {
-    float a = deg2rad((float)d);
+    float dd = applyDialTransform((float)d, offsetDeg, mirror);
+    float a = deg2rad(dd);
     int x0 = g.cx + (int)(cos(a) * (g.r_tick));
     int y0 = g.cy + (int)(sin(a) * (g.r_tick));
     int len = (d % 40 == 0) ? 10 : 6;
@@ -269,10 +289,11 @@ void drawPageBackgrounds() {
     tft1.fillScreen(BG);
     tft2.fillScreen(BG);
 
-    drawMiniDial(tft1, g1a, "Coolant");
-    drawMiniDial(tft1, g1b, "Oil");
-    drawMiniDial(tft2, g2a, "Voltage");
-    drawMiniDial(tft2, g2b, "Load");
+  drawMiniDial(tft1, g1a, "Coolant", DIAL_OFFSET_1, DIAL_MIRROR_1);
+  drawMiniDial(tft1, g1b, "Oil",     DIAL_OFFSET_1, DIAL_MIRROR_1);
+  drawMiniDial(tft2, g2a, "Voltage", DIAL_OFFSET_2, DIAL_MIRROR_2);
+  drawMiniDial(tft2, g2b, "Load",    DIAL_OFFSET_2, DIAL_MIRROR_2);
+
   }else {
     clearTextPage(tft1);
     clearTextPage(tft2);
@@ -289,9 +310,10 @@ void drawPageBackgrounds() {
   }
 }
 
-void updateGauge(Adafruit_GC9A01A &tft, GaugeUI &g, float value) {
+void updateGauge(Adafruit_GC9A01A &tft, GaugeUI &g, float value, float offsetDeg, bool mirror){
   float a = mapValueToAngle(value, specs[g.metric].vmin, specs[g.metric].vmax);
-
+  a = applyDialTransform(a, offsetDeg, mirror);
+  
   if (!isnan(g.lastAngle)) drawNeedle(tft, g, g.lastAngle, BG);
   drawNeedle(tft, g, a, g.needleColor);
 
@@ -338,10 +360,11 @@ void loop() {
   lastFrame = now;
 
   if (page == 0) {
-    updateGauge(tft1, g1a, getMetricValue(M_COOLANT, now));
-    updateGauge(tft1, g1b, getMetricValue(M_OIL, now));
-    updateGauge(tft2, g2a, getMetricValue(M_VOLT, now));
-    updateGauge(tft2, g2b, getMetricValue(M_LOAD, now));
+    updateGauge(tft1, g1a, getMetricValue(M_COOLANT, now), DIAL_OFFSET_1, DIAL_MIRROR_1);
+    updateGauge(tft1, g1b, getMetricValue(M_OIL, now),     DIAL_OFFSET_1, DIAL_MIRROR_1);
+    updateGauge(tft2, g2a, getMetricValue(M_VOLT, now),    DIAL_OFFSET_2, DIAL_MIRROR_2);
+    updateGauge(tft2, g2b, getMetricValue(M_LOAD, now),    DIAL_OFFSET_2, DIAL_MIRROR_2);
+
   } else {
     // update  every TEXT_UPDATE_MS only
     if (now - lastTextUpdateMs < TEXT_UPDATE_MS) return;
