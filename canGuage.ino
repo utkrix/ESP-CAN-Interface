@@ -3,18 +3,14 @@
 #include <Adafruit_GC9A01A.h>
 #include <math.h>
 
-// ============================================================
-// Arduino IDE generates function prototypes automatically.
-// So we MUST forward-declare types used in function params here.
-// ============================================================
+//  forward-declare types used in function params 
 enum MetricId : uint8_t;   // forward declaration
 struct GaugeUI;            // forward declaration
 
 uint32_t lastTextUpdateMs = 0;
-const uint32_t TEXT_UPDATE_MS = 400;   // smooth but not flickery
+const uint32_t TEXT_UPDATE_MS = 400;  
 
-// ===== Pins (ESP8266 GPIO numbers) =====
-// Display 1
+// Display 1 GPIOs
 #define CS1  5
 #define DC1  4
 #define RST1 12
@@ -27,7 +23,7 @@ const uint32_t TEXT_UPDATE_MS = 400;   // smooth but not flickery
 Adafruit_GC9A01A tft1(CS1, DC1, RST1);
 Adafruit_GC9A01A tft2(CS2, DC2, RST2);
 
-// ===== Colors =====
+// colors
 uint16_t BG = GC9A01A_BLACK;
 uint16_t FG = GC9A01A_WHITE;
 uint16_t TICK = GC9A01A_DARKGREY;
@@ -38,7 +34,7 @@ uint16_t NEEDLE_GREEN = GC9A01A_GREEN;
 
 uint16_t THEME_N1, THEME_N2, THEME_N3, THEME_N4;
 
-// ===== Helpers =====
+// helpers
 static inline float deg2rad(float d){ return d * 0.0174532925f; }
 
 
@@ -48,16 +44,13 @@ struct Theme {
 };
 
 Theme THEMES[] = {
-  // Retro Green Terminal
   { GC9A01A_BLACK, 0x07E0 /*GREEN*/, 0x03E0, 0x07E0, 0x07E0, 0x07E0, 0x07E0 },
 
-  // Amber CRT
   { GC9A01A_BLACK, 0xFD20 /*AMBER-ish*/, 0x7BE0, 0xFD20, 0xFD20, 0xFD20, 0xFD20 },
 
-  // Classic White on Black + Neon Needles
   { GC9A01A_BLACK, GC9A01A_WHITE, GC9A01A_DARKGREY, GC9A01A_RED, GC9A01A_CYAN, GC9A01A_YELLOW, 0x07E0 },
 
-  // “Synthwave” (purple-ish text)
+  //(purple-ish)
   { GC9A01A_BLACK, 0xF81F /*MAGENTA*/, 0x780F, 0xF81F, GC9A01A_CYAN, 0xFFE0, 0x07FF },
 };
 
@@ -86,7 +79,7 @@ float mapValueToAngle(float v, float vmin, float vmax) {
   return (-135.0f + 270.0f * t);
 }
 
-// ===== Metric system =====
+// metrics
 enum MetricId : uint8_t {
   M_COOLANT,
   M_OIL,
@@ -116,7 +109,7 @@ MetricSpec specs[] = {
   {"HP",      "hp",     0, 200},
 };
 
-// ===== Mini gauge UI =====
+// mini gauge ui elems
 struct GaugeUI {
   int cx, cy;
   int r_out;
@@ -128,7 +121,7 @@ struct GaugeUI {
   MetricId metric;
 };
 
-// Two gauges per screen (stacked: top + bottom)
+// two gauges per screen  (top and bottom)
 GaugeUI g1a = {120,  62, 52, 40, 36, 2, NEEDLE_RED,    NAN, M_COOLANT}; // tft1 top
 GaugeUI g1b = {120, 178, 52, 40, 36, 2, NEEDLE_YELLOW, NAN, M_OIL};     // tft1 bottom
 
@@ -144,7 +137,7 @@ void applyNeedleColorsToGauges() {
 }
 
 
-// ===== Drawing =====
+// drawing on screens
 void drawMiniDial(Adafruit_GC9A01A &tft, const GaugeUI &g, const char* title) {
   tft.drawCircle(g.cx, g.cy, g.r_out, FG);
   tft.drawCircle(g.cx, g.cy, g.r_out - 1, FG);
@@ -161,10 +154,10 @@ void drawMiniDial(Adafruit_GC9A01A &tft, const GaugeUI &g, const char* title) {
 
   tft.setTextSize(1);
   tft.setTextColor(FG, BG);
-  
+
   int16_t bx, by; uint16_t bw, bh;
   tft.getTextBounds(title, 0, 0, &bx, &by, &bw, &bh);
-  
+
   // place inside, slightly above the value line
   int labelY = g.cy + (g.r_out / 2);   // inside lower half
   tft.fillRect(g.cx - 60, labelY - 2, 120, 12, BG); // clean label strip
@@ -185,7 +178,7 @@ void drawNeedle(Adafruit_GC9A01A &tft, const GaugeUI &g, float angleDeg, uint16_
 
 void drawGaugeValue(Adafruit_GC9A01A &tft, const GaugeUI &g, float value) {
   tft.setTextColor(FG, BG);
-  tft.setTextSize(1); // smaller to prevent overflow
+  tft.setTextSize(1); //  to prevent overflow
 
   // fixed area just under the gauge
   int boxY = g.cy + g.r_out - 2;
@@ -194,8 +187,7 @@ void drawGaugeValue(Adafruit_GC9A01A &tft, const GaugeUI &g, float value) {
 
   char buf[24];
 
-  // Fixed-width: pad to keep overwriting consistent
-  // Example: " 123 C   " or "12.6 V  "
+  // pading to keep overwriting consistent
   if (g.metric == M_VOLT) {
     snprintf(buf, sizeof(buf), "%5.1f %-4s", value, specs[g.metric].unit);
   } else {
@@ -205,7 +197,7 @@ void drawGaugeValue(Adafruit_GC9A01A &tft, const GaugeUI &g, float value) {
 }
 
 
-// ===== Page 2 (Text page) =====
+// Text page
 void clearTextPage(Adafruit_GC9A01A &tft) {
   tft.fillScreen(BG);
   tft.drawCircle(120, 120, 115, TICK);
@@ -230,7 +222,7 @@ void drawTextMetric(Adafruit_GC9A01A &tft, int x, int y, MetricId id, float v) {
 }
 
 void drawTextMetricFixed(Adafruit_GC9A01A &tft, int x, int y, MetricId id, float v) {
-  // Value line only (label is printed once in drawPageBackgrounds)
+  // lable is printed once in drawPageBackgrounds
   tft.setTextSize(3);
   tft.setTextColor(FG, BG);
 
@@ -250,7 +242,7 @@ void drawTextMetricFixed(Adafruit_GC9A01A &tft, int x, int y, MetricId id, float
 }
 
 
-// ===== Demo metric values =====
+// random demo values
 float getMetricValue(MetricId id, uint32_t nowMs) {
   float t = (nowMs % 12000) / 12000.0f;
   float ease = (t < 0.5f) ? (2*t*t) : (1 - powf(-2*t + 2, 2)/2);
@@ -272,8 +264,8 @@ float getMetricValue(MetricId id, uint32_t nowMs) {
   return 0;
 }
 
-// ===== Auto Page Switching =====
-const uint32_t PAGE_MS = 15000; // 10–15 seconds
+// page-switching
+const uint32_t PAGE_MS = 15000; // 10–15 secs
 int page = 0;
 uint32_t lastPageMs = 0;
 
@@ -292,7 +284,6 @@ void drawPageBackgrounds() {
   
     tft1.setTextSize(2); tft1.setTextColor(FG, BG);
     tft1.setCursor(65, 15); tft1.print("PERF/ECO");
-    // optional: draw label placeholders so it's clean
     tft1.setCursor(25, 55);  tft1.print("Boost");
     tft1.setCursor(25, 140); tft1.print("IAT");
   
@@ -357,7 +348,7 @@ void loop() {
     updateGauge(tft2, g2a, getMetricValue(M_VOLT, now));
     updateGauge(tft2, g2b, getMetricValue(M_LOAD, now));
   } else {
-    // Update text only every TEXT_UPDATE_MS
+    // update  every TEXT_UPDATE_MS only
     if (now - lastTextUpdateMs < TEXT_UPDATE_MS) return;
     lastTextUpdateMs = now;
 
@@ -365,9 +356,6 @@ void loop() {
     float iat   = getMetricValue(M_IAT, now);
     float l100  = getMetricValue(M_LPER100, now);
     float hp    = getMetricValue(M_HP, now);
-
-    // Draw labels once? Easiest: always redraw labels (cheap) but overwrite values cleanly.
-    // We will NOT clear huge rectangles anymore.
 
     // Left TFT: Boost + IAT
     drawTextMetricFixed(tft1, 25, 55,  M_BOOST_PSI, boost);
