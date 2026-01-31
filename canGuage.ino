@@ -140,11 +140,11 @@ struct GaugeUI {
 };
 
 // two gauges per screen  (top and bottom)
-GaugeUI g1a = {120,  62, 52, 40, 36, 2, NEEDLE_RED,    NAN, M_COOLANT}; // tft1 top
-GaugeUI g1b = {120, 178, 52, 40, 36, 2, NEEDLE_YELLOW, NAN, M_OIL};     // tft1 bottom
+GaugeUI g1a = {120,  62, 52, 40, 32, 2, NEEDLE_RED,    NAN, M_COOLANT}; // tft1 top
+GaugeUI g1b = {120, 178, 52, 40, 32, 2, NEEDLE_YELLOW, NAN, M_OIL};     // tft1 bottom
 
-GaugeUI g2a = {120,  62, 52, 40, 36, 2, NEEDLE_CYAN,   NAN, M_VOLT};    // tft2 top
-GaugeUI g2b = {120, 178, 52, 40, 36, 2, NEEDLE_GREEN,  NAN, M_LOAD};    // tft2 bottom
+GaugeUI g2a = {120,  62, 52, 40, 32, 2, NEEDLE_CYAN,   NAN, M_VOLT};    // tft2 top
+GaugeUI g2b = {120, 178, 52, 40, 32, 2, NEEDLE_GREEN,  NAN, M_LOAD};    // tft2 bottom
 
 
 void applyNeedleColorsToGauges() {
@@ -172,15 +172,15 @@ void drawMiniDial(Adafruit_GC9A01A &tft, const GaugeUI &g, const char* title, fl
     tft.drawLine(x0, y0, x1, y1, (d % 40 == 0) ? FG : TICK);
   }
 
-  tft.setTextSize(1);
+  tft.setTextSize(2);
   tft.setTextColor(TICK, BG);
 
   int16_t bx, by; uint16_t bw, bh;
   tft.getTextBounds(title, 0, 0, &bx, &by, &bw, &bh);
 
   // place inside, slightly above the value line
-  int labelY = g.cy + (g.r_out / 2);   // inside lower half
-  tft.fillRect(g.cx - 60, labelY - 2, 120, 12, BG); // clean label strip
+  int labelY = g.cy + (g.r_out / 2) - 10;   // inside lower half
+  tft.fillRect(g.cx - 60, labelY - 2, 140, 18, BG); // clean label strip
   tft.setCursor(g.cx - (int)bw / 2, labelY);
   tft.print(title);
 }
@@ -198,23 +198,31 @@ void drawNeedle(Adafruit_GC9A01A &tft, const GaugeUI &g, float angleDeg, uint16_
 
 void drawGaugeValue(Adafruit_GC9A01A &tft, const GaugeUI &g, float value) {
   tft.setTextColor(FG, BG);
-  tft.setTextSize(1); //  to prevent overflow
+  tft.setTextSize(2);
 
-  // fixed area just under the gauge
-  int boxY = g.cy + g.r_out - 2;
-  tft.fillRect(g.cx - 55, boxY, 110, 16, BG);
-  tft.setCursor(g.cx - 52, boxY + 3);
+  // value INSIDE gauge, under the label area
+  int valY = g.cy + (g.r_out / 2) + 8;   // tweak +10 if needed
 
+  // Build fixed-width string (helps prevent leftover characters)
   char buf[24];
-
-  // pading to keep overwriting consistent
   if (g.metric == M_VOLT) {
-    snprintf(buf, sizeof(buf), "%5.1f %-4s", value, specs[g.metric].unit);
+    snprintf(buf, sizeof(buf), "%4.1f %-3s", value, specs[g.metric].unit);
   } else {
-    snprintf(buf, sizeof(buf), "%5.0f %-4s", value, specs[g.metric].unit);
+    snprintf(buf, sizeof(buf), "%4.0f %-3s", value, specs[g.metric].unit);
   }
+
+  // Clear a strip where value goes
+  tft.fillRect(g.cx - 70, valY - 2, 140, 18, BG);
+
+  // Measure and center text
+  int16_t x1, y1; uint16_t w, h;
+  tft.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
+
+  int valX = g.cx - (int)w / 2;
+  tft.setCursor(valX, valY);
   tft.print(buf);
 }
+
 
 
 // Text page
