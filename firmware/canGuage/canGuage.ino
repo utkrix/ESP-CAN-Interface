@@ -5,6 +5,7 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 #include <ArduinoJson.h>
+#include "bitmap.h" // External bitmap data
 
 //  function parameters
 enum MetricId : uint8_t;
@@ -17,7 +18,7 @@ const uint32_t TEXT_UPDATE_MS = 200; // 5Hz to match data stream better
 const char *WIFI_SSID = "ESP_GAUGE";
 const char *WIFI_PASS = "12345678";
 const uint16_t UDP_PORT = 8888;
-const uint32_t UDP_TIMEOUT_MS = 3000;
+const uint32_t UDP_TIMEOUT_MS = 2000; // Short timeout - 2 seconds
 WiFiUDP udp;
 uint32_t lastUdpMs = 0;
 
@@ -48,6 +49,8 @@ uint16_t NEEDLE_YELLOW = GC9A01A_YELLOW;
 uint16_t NEEDLE_GREEN = GC9A01A_GREEN;
 
 uint16_t THEME_N1, THEME_N2, THEME_N3, THEME_N4;
+
+// Bitmap data has been moved to bitmap.cpp for better code organization
 
 // helpers
 static inline float deg2rad(float d) { return d * 0.0174532925f; }
@@ -104,6 +107,33 @@ void applyTheme(int idx)
   THEME_N2 = th.n2;
   THEME_N3 = th.n3;
   THEME_N4 = th.n4;
+}
+
+// Display bitmap for no connection status - 16-bit RGB565 format (optimized)
+void drawBitmap16(Adafruit_GC9A01A &tft, int16_t x, int16_t y, const uint16_t *bitmap, int16_t w, int16_t h)
+{
+  for (int16_t j = 0; j < h; j++)
+  {
+    // Yield to watchdog every 2 rows to prevent ESP restart
+    if (j % 2 == 0)
+    {
+      yield();
+    }
+
+    for (int16_t i = 0; i < w; i++)
+    {
+      uint16_t color = pgm_read_word(bitmap + j * w + i);
+      tft.drawPixel(x + i, y + j, color);
+    }
+  }
+}
+
+// Display connection status screen
+void drawConnectionStatus(Adafruit_GC9A01A &tft)
+{
+  tft.fillScreen(BG);
+  // Draw bitmap using constants from bitmap.h
+  drawBitmap16(tft, 0, 0, noConnectionBitmap, BITMAP_WIDTH, BITMAP_HEIGHT);
 }
 
 float applyDialTransform(float angleDeg, float offsetDeg, bool mirror)
@@ -630,6 +660,54 @@ void loop()
   uint32_t now = millis();
   updateUdp();
   updateBlink(now);
+
+  // Check if we have fresh UDP data
+  bool hasUdpData = udpDataFresh(now);
+
+  // Static variables to track connection status changes with hysteresis
+  static bool lastUdpStatus = false;
+  static bool screenNeedsUpdate = true;
+  static uint32_t connectionStateChangeMs = 0;
+  const uint32_t STATE_CHANGE_DELAY_MS = 1000; // 1 second minimum before state change
+
+  // Check if connection status changed and add hysteresis
+  if (hasUdpData != lastUdpStatus)
+  {
+    if (connectionStateChangeMs == 0)
+    {
+      connectionStateChangeMs = now;
+    }
+    else if ((now - connectionStateChangeMs) >= STATE_CHANGE_DELAY_MS)
+    {
+      screenNeedsUpdate = true;
+      lastUdpStatus = hasUdpData;
+      connectionStateChangeMs = 0;
+    }
+  }
+  else
+  {
+    connectionStateChangeMs = 0; // Reset if status is stable
+  }
+
+  // If no UDP data, show connection status screen
+  if (!hasUdpData)
+  {
+    if (screenNeedsUpdate)
+    {
+      drawConnectionStatus(tft1);
+      drawConnectionStatus(tft2);
+      screenNeedsUpdate = false;
+    }
+    return; // Exit early, no gauge updates needed
+  }
+
+  // If we just got UDP data back, redraw backgrounds
+  if (screenNeedsUpdate)
+  {
+    drawPageBackgrounds();
+    screenNeedsUpdate = false;
+  }
+
   if (now - lastPageMs >= PAGE_MS)
   {
     page = (page + 1) % 2;
@@ -644,7 +722,11 @@ void loop()
 
   static uint32_t lastFrame = 0;
   if (now - lastFrame < 50) // 20Hz for smoother gauge movement
+  {
+    // Even when not updating frames, still process UDP
+    updateUdp();
     return;
+  }
   lastFrame = now;
 
   if (page == 0)
