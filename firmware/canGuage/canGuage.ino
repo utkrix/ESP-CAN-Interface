@@ -7,11 +7,11 @@
 #include <ArduinoJson.h>
 
 //  function parameters
-enum MetricId : uint8_t; 
-struct GaugeUI;         
+enum MetricId : uint8_t;
+struct GaugeUI;
 
 uint32_t lastTextUpdateMs = 0;
-const uint32_t TEXT_UPDATE_MS = 400;
+const uint32_t TEXT_UPDATE_MS = 200; // 5Hz to match data stream better
 
 // Wi-Fi  and  UDP
 const char *WIFI_SSID = "ESP_GAUGE";
@@ -418,15 +418,23 @@ bool udpDataFresh(uint32_t nowMs)
 
 void updateUdp()
 {
-  int packetSize = udp.parsePacket();
-  if (packetSize <= 0)
-    return;
-
   static char buf[512];
-  int len = udp.read(buf, sizeof(buf) - 1);
-  if (len <= 0)
+  bool receivedPacket = false;
+
+  // Drain all packets from UDP buffer to get the latest one
+  while (udp.parsePacket() > 0)
+  {
+    int len = udp.read(buf, sizeof(buf) - 1);
+    if (len > 0)
+    {
+      buf[len] = 0;
+      receivedPacket = true;
+      // drain buffer until last packet
+    }
+  }
+
+  if (!receivedPacket)
     return;
-  buf[len] = 0;
 
   StaticJsonDocument<512> doc;
   DeserializationError err = deserializeJson(doc, buf);
@@ -635,7 +643,7 @@ void loop()
   }
 
   static uint32_t lastFrame = 0;
-  if (now - lastFrame < 33)
+  if (now - lastFrame < 50) // 20Hz for smoother gauge movement
     return;
   lastFrame = now;
 
