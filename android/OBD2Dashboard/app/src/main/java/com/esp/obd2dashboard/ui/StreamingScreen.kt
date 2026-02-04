@@ -17,6 +17,7 @@ import com.esp.obd2dashboard.viewmodel.ObdViewModel
 fun StreamingScreen(viewModel: ObdViewModel) {
     val streamConfig by viewModel.streamConfig.collectAsState()
     val streamStatus by viewModel.streamStatus.collectAsState()
+    val testStreaming by viewModel.testStreaming.collectAsState()
 
     var ipAddress by remember { mutableStateOf(streamConfig.targetIp) }
     var port by remember { mutableStateOf(streamConfig.targetPort.toString()) }
@@ -84,6 +85,12 @@ fun StreamingScreen(viewModel: ObdViewModel) {
                         viewModel.configureStreaming(ipAddress, portInt, it)
                     }
             )
+        }
+
+        // Test streaming switch
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(text = "Test Mode (Random Data)", style = MaterialTheme.typography.titleMedium)
+            Switch(checked = testStreaming, onCheckedChange = { viewModel.setTestStreaming(it) })
         }
 
         Divider()

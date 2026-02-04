@@ -10,10 +10,11 @@ import com.esp.obd2dashboard.network.UdpStreamer
 import com.esp.obd2dashboard.obd.DerivedMetricsCalculator
 import com.esp.obd2dashboard.obd.ElmSession
 import com.esp.obd2dashboard.obd.PidScheduler
+import kotlin.math.pow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-/** Main ViewModel managing OBD connection, data polling, and streaming */
+/**  ViewModel managing OBD connection, data polling, and streaming */
 class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     // Core components
@@ -38,6 +39,11 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _streamStatus = MutableStateFlow("")
     val streamStatus: StateFlow<String> = _streamStatus
+
+    private val _testStreaming = MutableStateFlow(false)
+    val testStreaming: StateFlow<Boolean> = _testStreaming
+
+    private var testStreamJob: kotlinx.coroutines.Job? = null
 
     init {
         // Observe connection state from transport
@@ -101,6 +107,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Disconnect */
     fun disconnect() {
+        stopTestStreaming()
         pidScheduler.stopPolling()
         udpStreamer.stopStreaming()
         bluetoothTransport.disconnect()
@@ -203,6 +210,89 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
     /** Start UDP streaming */
     private fun startStreaming() {
         udpStreamer.startStreaming { _vehicleMetrics.value }
+    }
+
+    /** Enable/disable test streaming with random data */
+    fun setTestStreaming(enabled: Boolean) {
+        _testStreaming.value = enabled
+        if (enabled) {
+            startTestStreaming()
+        } else {
+            stopTestStreaming()
+        }
+    }
+
+    private fun startTestStreaming() {
+        if (testStreamJob != null) return
+
+        val (ip, port, _) = udpStreamer.getConfig()
+        udpStreamer.configure(ip, port)
+        if (!udpStreamer.isActive()) {
+            udpStreamer.startStreaming { _vehicleMetrics.value }
+        }
+
+        testStreamJob =
+                viewModelScope.launch {
+                    while (_testStreaming.value) {
+                        _vehicleMetrics.value = generateTestMetrics()
+                        kotlinx.coroutines.delay(200)
+                    }
+                }
+    }
+
+    private fun stopTestStreaming() {
+        testStreamJob?.cancel()
+        testStreamJob = null
+
+        val normalStreamingEnabled =
+                _streamConfig.value.enabled && _connectionState.value is ConnectionState.Connected
+        if (!normalStreamingEnabled) {
+            udpStreamer.stopStreaming()
+        }
+    }
+
+    private fun generateTestMetrics(): VehicleMetrics {
+        val now = System.currentTimeMillis()
+        val t = (now % 12000) / 12000.0
+        val ease = if (t < 0.5) (2 * t * t) else (1 - ((-2 * t + 2).pow(2.0) / 2))
+
+        val rpm = 800 + (ease * 5200)
+        val speed = ease * 90
+        val map = 35 + ease * 160
+        val baro = 101.3
+        val coolant = 60 + ease * 45
+        val iat = 25 + (1 - ease) * 12
+        val load = ease * 85
+        val volt = 12.2 + ease * 1.3
+        val maf = 4 + ease * 18
+        val oil = 70 + ease * 55
+
+        val derived =
+                derivedCalculator.calculateAll(
+                        mapKpa = map,
+                        baroKpa = baro,
+                        mafGps = maf,
+                        speedKmh = speed,
+                        rpm = rpm
+                )
+
+        return VehicleMetrics(
+                rpm = rpm,
+                speedKmh = speed,
+                coolantTempC = coolant,
+                iatC = iat,
+                engineLoadPct = load,
+                mapKpa = map,
+                voltageV = volt,
+                mafGps = maf,
+                baroKpa = baro,
+                oilTempC = oil,
+                boostPsi = derived.boostPsi,
+                fuelConsumptionLPer100km = derived.fuelConsumptionLPer100km,
+                estimatedHp = derived.estimatedHp,
+                pidSupport = emptyMap(),
+                updateRates = emptyMap()
+        )
     }
 
     /** Update streaming status text */
