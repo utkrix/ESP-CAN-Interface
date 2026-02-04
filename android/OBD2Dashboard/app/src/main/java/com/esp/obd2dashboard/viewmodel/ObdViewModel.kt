@@ -14,7 +14,7 @@ import kotlin.math.pow
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-/**  ViewModel managing OBD connection, data polling, and streaming */
+/** ViewModel managing OBD connection, data polling, and streaming */
 class ObdViewModel(application: Application) : AndroidViewModel(application) {
 
     // Core components
@@ -235,7 +235,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                 viewModelScope.launch {
                     while (_testStreaming.value) {
                         _vehicleMetrics.value = generateTestMetrics()
-                        kotlinx.coroutines.delay(200)
+                        kotlinx.coroutines.delay(100) // 10Hz for smoother updates
                     }
                 }
     }

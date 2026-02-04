@@ -13,7 +13,7 @@ import org.json.JSONObject
 class UdpStreamer(private val scope: CoroutineScope) {
     companion object {
         private const val TAG = "UdpStreamer"
-        private const val DEFAULT_TARGET_HZ = 15 // Stream rate
+        private const val DEFAULT_TARGET_HZ = 10 // Stream rate - optimized for display sync
         private const val SOCKET_TIMEOUT_MS = 1000
     }
 
