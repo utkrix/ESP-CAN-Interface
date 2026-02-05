@@ -17,7 +17,7 @@ class PidScheduler(private val elmSession: ElmSession, private val scope: Corout
     companion object {
         private const val TAG = "PidScheduler"
         private const val MAX_RETRIES = 1
-        private const val INTER_COMMAND_DELAY_MS = 50L // Delay between commands
+        private const val INTER_COMMAND_DELAY_MS = 100L // Increased delay for better compatibility
         private const val CONSECUTIVE_NODATA_THRESHOLD =
                 5 // Trigger recovery after this many NO DATA
         private const val RECOVERY_DELAY_MS = 2000L
