@@ -232,7 +232,7 @@ struct GaugeUI
 
 // two gauges per screen  (top and bottom)
 GaugeUI g1a = {120, 62, 52, 40, 32, 2, NEEDLE_RED, NAN, M_COOLANT}; // tft1 top
-GaugeUI g1b = {120, 178, 52, 40, 32, 2, NEEDLE_YELLOW, NAN, M_OIL}; // tft1 bottom
+GaugeUI g1b = {120, 178, 52, 40, 32, 2, NEEDLE_YELLOW, NAN, M_IAT}; // tft1 bottom
 
 GaugeUI g2a = {120, 62, 52, 40, 32, 2, NEEDLE_CYAN, NAN, M_VOLT};   // tft2 top
 GaugeUI g2b = {120, 178, 52, 40, 32, 2, NEEDLE_GREEN, NAN, M_LOAD}; // tft2 bottom
@@ -583,7 +583,7 @@ void drawPageBackgrounds()
     tft2.fillScreen(BG);
 
     drawMiniDial(tft1, g1a, "Coolant", DIAL_OFFSET_1, DIAL_MIRROR_1);
-    drawMiniDial(tft1, g1b, "Oil", DIAL_OFFSET_1, DIAL_MIRROR_1);
+    drawMiniDial(tft1, g1b, "IAT", DIAL_OFFSET_1, DIAL_MIRROR_1);
     drawMiniDial(tft2, g2a, "Voltage", DIAL_OFFSET_2, DIAL_MIRROR_2);
     drawMiniDial(tft2, g2b, "Load", DIAL_OFFSET_2, DIAL_MIRROR_2);
   }
@@ -751,7 +751,6 @@ void loop()
 
     // blink conditions
     bool rpmBlink = (rpm >= 3000);
-    bool oilBlink = false;
     // LEFT: rpm +  Boost + IAT
     drawValueOnly(tft1, TXT1_X, 60 + TXT1_Y_SHIFT, M_RPM, rpm, 3, rpmBlink);
     drawValueOnly(tft1, TXT1_X, 120 + TXT1_Y_SHIFT, M_BOOST_PSI, boost, 2, false);
