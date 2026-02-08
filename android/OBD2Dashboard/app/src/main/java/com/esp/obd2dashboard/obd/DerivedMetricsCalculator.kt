@@ -1,10 +1,8 @@
 package com.esp.obd2dashboard.obd
 
-import android.util.Log
-
 /**
  * Calculator for derived metrics from raw OBD values using speed-density approach
- * - Boost pressure (psi) 
+ * - Boost pressure (psi)
  * - Fuel consumption (L/100km) - estimated from MAP, RPM, IAT
  * - Estimated horsepower - speed-density based for 1.2L engine
  */
@@ -22,7 +20,7 @@ class DerivedMetricsCalculator {
         private const val DISPLACEMENT_L = 1.2
         private const val MAX_HP = 82.0
         private const val MAX_RPM = 6000.0
-        
+
         // Standard conditions
         private const val STANDARD_PRESSURE_KPA = 101.325
         private const val STANDARD_TEMP_K = 288.15
@@ -30,19 +28,22 @@ class DerivedMetricsCalculator {
 
     private var lastStableConsumption: Double? = null
 
-    /**
-     * Calculate boost pressure in PSI from MAP and BARO
-     */
+    /** Calculate boost pressure in PSI from MAP and BARO */
     fun calculateBoost(mapKpa: Double?, baroKpa: Double?, rpm: Double?): Double? {
         if (mapKpa == null || baroKpa == null) return null
         return (mapKpa - baroKpa) * KPA_TO_PSI
     }
 
     /**
-     * Calculate fuel consumption using speed-density approach
-     * Estimates based on MAP, RPM, IAT, and vehicle speed
+     * Calculate fuel consumption using speed-density approach Estimates based on MAP, RPM, IAT, and
+     * vehicle speed
      */
-    fun calculateFuelConsumption(mapKpa: Double?, rpm: Double?, iatC: Double?, speedKmh: Double?): Double? {
+    fun calculateFuelConsumption(
+            mapKpa: Double?,
+            rpm: Double?,
+            iatC: Double?,
+            speedKmh: Double?
+    ): Double? {
         if (mapKpa == null || rpm == null || iatC == null || speedKmh == null) return null
 
         // Below minimum speed, return null (will display as "--.-")
@@ -62,7 +63,7 @@ class DerivedMetricsCalculator {
         // Estimate fuel flow based on engine load (MAP-based)
         val fuelFlowLps = (mapKpa * rpm * ve * 0.000001) // L/s approximation
 
-        // Convert to L/100km  
+        // Convert to L/100km
         val consumption = (fuelFlowLps * 3600.0 * 100.0) / speedKmh
 
         // Clamp to reasonable range
@@ -73,10 +74,15 @@ class DerivedMetricsCalculator {
     }
 
     /**
-     * Estimate horsepower using speed-density approach
-     * Based on MAP, BARO, IAT, and RPM for 1.2L engine
+     * Estimate horsepower using speed-density approach Based on MAP, BARO, IAT, and RPM for 1.2L
+     * engine
      */
-    fun calculateEstimatedHp(mapKpa: Double?, baroKpa: Double?, iatC: Double?, rpm: Double?): Double? {
+    fun calculateEstimatedHp(
+            mapKpa: Double?,
+            baroKpa: Double?,
+            iatC: Double?,
+            rpm: Double?
+    ): Double? {
         if (mapKpa == null || baroKpa == null || iatC == null || rpm == null) return null
 
         // Convert IAT to Kelvin
@@ -102,16 +108,14 @@ class DerivedMetricsCalculator {
         return hp.coerceIn(0.0, MAX_HP)
     }
 
-    /**
-     * Volumetric efficiency curve for small displacement engine
-     */
+    /** Volumetric efficiency curve for small displacement engine */
     private fun calculateVolumetricEfficiency(rpm: Double): Double {
         return when {
             rpm < 1000 -> 0.6
-            rpm < 2000 -> 0.65 + (rpm - 1000) * 0.0001  // 0.65-0.75
+            rpm < 2000 -> 0.65 + (rpm - 1000) * 0.0001 // 0.65-0.75
             rpm < 4000 -> 0.75 + (rpm - 2000) * 0.00005 // 0.75-0.85
             rpm < 6000 -> 0.85 - (rpm - 4000) * 0.00005 // 0.85-0.75
-            else -> 0.75 - (rpm - 6000) * 0.0001        // declining after 6000
+            else -> 0.75 - (rpm - 6000) * 0.0001 // declining after 6000
         }
     }
 
@@ -133,14 +137,6 @@ class DerivedMetricsCalculator {
     /** Reset calculator state */
     fun reset() {
         lastStableConsumption = null
-    }
-}
-
-    /** Reset calculator state (e.g., on disconnect) */
-    fun reset() {
-        baselineBaroKpa = null
-        lastStableConsumption = null
-        Log.i(TAG, "Reset derived metrics calculator")
     }
 }
 
