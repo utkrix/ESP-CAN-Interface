@@ -114,7 +114,7 @@ class UdpStreamer(private val scope: CoroutineScope) {
 
         // Add raw values (null becomes JSONObject.NULL)
         json.put("rpm", metrics.rpm ?: JSONObject.NULL)
-        json.put("speed", metrics.speedKmh ?: JSONObject.NULL)
+        json.put("speed_kmh", metrics.speedKmh ?: JSONObject.NULL)
         json.put("coolant_c", metrics.coolantTempC ?: JSONObject.NULL)
         json.put("iat_c", metrics.iatC ?: JSONObject.NULL)
         json.put("load_pct", metrics.engineLoadPct ?: JSONObject.NULL)
@@ -122,7 +122,7 @@ class UdpStreamer(private val scope: CoroutineScope) {
         json.put("volt_v", metrics.voltageV ?: JSONObject.NULL)
         json.put("maf_gps", metrics.mafGps ?: JSONObject.NULL)
         json.put("baro_kpa", metrics.baroKpa ?: JSONObject.NULL)
-        json.put("oil_c", metrics.oilTempC ?: JSONObject.NULL)
+        json.put("ambient_c", metrics.ambientTempC ?: JSONObject.NULL)
 
         // Add derived values
         json.put("boost_psi", metrics.boostPsi ?: JSONObject.NULL)

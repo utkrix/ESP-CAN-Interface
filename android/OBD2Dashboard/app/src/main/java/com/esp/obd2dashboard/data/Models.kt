@@ -12,7 +12,7 @@ data class VehicleMetrics(
         val voltageV: Double? = null,
         val mafGps: Double? = null,
         val baroKpa: Double? = null,
-        val oilTempC: Double? = null,
+        val ambientTempC: Double? = null,
 
         // Derived metrics
         val boostPsi: Double? = null,

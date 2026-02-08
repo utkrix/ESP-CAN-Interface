@@ -162,14 +162,14 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         val voltage = pidValues[ObdPid.VOLTAGE]
         val maf = pidValues[ObdPid.MAF]
         val baro = pidValues[ObdPid.BARO]
-        val oil = pidValues[ObdPid.OIL_TEMP]
+        val ambient = pidValues[ObdPid.AMBIENT_TEMP]
 
         // Calculate derived metrics
         val derived =
                 derivedCalculator.calculateAll(
                         mapKpa = map,
                         baroKpa = baro,
-                        mafGps = maf,
+                        iatC = iat,
                         speedKmh = speed,
                         rpm = rpm
                 )
@@ -186,7 +186,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                         voltageV = voltage,
                         mafGps = maf,
                         baroKpa = baro,
-                        oilTempC = oil,
+                        ambientTempC = ambient,
                         boostPsi = derived.boostPsi,
                         fuelConsumptionLPer100km = derived.fuelConsumptionLPer100km,
                         estimatedHp = derived.estimatedHp,
@@ -265,13 +265,13 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
         val load = ease * 85
         val volt = 12.2 + ease * 1.3
         val maf = 4 + ease * 18
-        val oil = 70 + ease * 55
+        val ambient = 20 + (t * 15) // 20-35°C ambient temp
 
         val derived =
                 derivedCalculator.calculateAll(
                         mapKpa = map,
                         baroKpa = baro,
-                        mafGps = maf,
+                        iatC = iat,
                         speedKmh = speed,
                         rpm = rpm
                 )
@@ -286,7 +286,7 @@ class ObdViewModel(application: Application) : AndroidViewModel(application) {
                 voltageV = volt,
                 mafGps = maf,
                 baroKpa = baro,
-                oilTempC = oil,
+                ambientTempC = ambient,
                 boostPsi = derived.boostPsi,
                 fuelConsumptionLPer100km = derived.fuelConsumptionLPer100km,
                 estimatedHp = derived.estimatedHp,

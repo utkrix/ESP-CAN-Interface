@@ -3,10 +3,10 @@ package com.esp.obd2dashboard.obd
 import android.util.Log
 
 /**
- * Calculator for derived metrics from raw OBD values
- * - Boost pressure (psi)
- * - Fuel consumption (L/100km)
- * - Estimated horsepower
+ * Calculator for derived metrics from raw OBD values using speed-density approach
+ * - Boost pressure (psi) 
+ * - Fuel consumption (L/100km) - estimated from MAP, RPM, IAT
+ * - Estimated horsepower - speed-density based for 1.2L engine
  */
 class DerivedMetricsCalculator {
 
@@ -15,122 +15,126 @@ class DerivedMetricsCalculator {
 
         // Constants for calculations
         private const val KPA_TO_PSI = 0.145038
-        private const val AFR_GASOLINE = 14.7 // Air-fuel ratio for gasoline
-        private const val FUEL_DENSITY_G_PER_L = 745.0 // Gasoline density
-        private const val MIN_SPEED_FOR_CONSUMPTION = 5.0 // km/h
-        private const val MAX_CONSUMPTION_CLAMP = 60.0 // L/100km
+        private const val MIN_SPEED_FOR_CONSUMPTION = 3.0 // km/h
+        private const val MAX_CONSUMPTION_CLAMP = 30.0 // L/100km
 
-        // HP estimation constants (tuned for 82 bhp @ 6000 rpm)
+        // Engine specifications for 1.2L engine
+        private const val DISPLACEMENT_L = 1.2
         private const val MAX_HP = 82.0
         private const val MAX_RPM = 6000.0
-        private const val HP_MAF_MULTIPLIER = 0.85 // Tuning factor
+        
+        // Standard conditions
+        private const val STANDARD_PRESSURE_KPA = 101.325
+        private const val STANDARD_TEMP_K = 288.15
     }
 
-    // Baseline BARO for when BARO PID is not supported
-    private var baselineBaroKpa: Double? = null
     private var lastStableConsumption: Double? = null
 
     /**
-     * Calculate boost pressure in PSI Uses BARO if available, otherwise uses baseline captured at
-     * engine off
+     * Calculate boost pressure in PSI from MAP and BARO
      */
     fun calculateBoost(mapKpa: Double?, baroKpa: Double?, rpm: Double?): Double? {
-        if (mapKpa == null) return null
-
-        // If we have actual BARO reading, use it
-        if (baroKpa != null) {
-            return (mapKpa - baroKpa) * KPA_TO_PSI
-        }
-
-        // If engine is off or idling very low, capture baseline
-        if (rpm != null && rpm < 100 && baselineBaroKpa == null) {
-            baselineBaroKpa = mapKpa
-            Log.i(TAG, "Captured baseline BARO: $mapKpa kPa")
-        }
-
-        // Use baseline if available
-        if (baselineBaroKpa != null) {
-            return (mapKpa - baselineBaroKpa!!) * KPA_TO_PSI
-        }
-
-        // No BARO available yet
-        return null
+        if (mapKpa == null || baroKpa == null) return null
+        return (mapKpa - baroKpa) * KPA_TO_PSI
     }
 
     /**
-     * Calculate fuel consumption in L/100km using MAF sensor Returns null if data is insufficient
-     * or speed too low
+     * Calculate fuel consumption using speed-density approach
+     * Estimates based on MAP, RPM, IAT, and vehicle speed
      */
-    fun calculateFuelConsumption(mafGps: Double?, speedKmh: Double?): Double? {
-        if (mafGps == null || speedKmh == null) return null
+    fun calculateFuelConsumption(mapKpa: Double?, rpm: Double?, iatC: Double?, speedKmh: Double?): Double? {
+        if (mapKpa == null || rpm == null || iatC == null || speedKmh == null) return null
 
-        // Below minimum speed, hold last stable value or return null
+        // Below minimum speed, return null (will display as "--.-")
         if (speedKmh < MIN_SPEED_FOR_CONSUMPTION) {
-            return lastStableConsumption
+            return null
         }
 
-        // MAF-based calculation
-        // fuel_g/s = MAF_g/s / AFR
-        val fuelGps = mafGps / AFR_GASOLINE
+        // Convert IAT to Kelvin
+        val iatK = iatC + 273.15
 
-        // fuel_L/s = fuel_g/s / density_g/L
-        val fuelLps = fuelGps / FUEL_DENSITY_G_PER_L
+        // Air density correction factor
+        val densityCorrection = (mapKpa / STANDARD_PRESSURE_KPA) * (STANDARD_TEMP_K / iatK)
 
-        // speed_m/s
-        val speedMps = speedKmh / 3.6
+        // Volumetric efficiency (estimated curve)
+        val ve = calculateVolumetricEfficiency(rpm)
 
-        if (speedMps < 0.4) { // ~1.4 km/h safety check
-            return lastStableConsumption
-        }
+        // Estimate fuel flow based on engine load (MAP-based)
+        val fuelFlowLps = (mapKpa * rpm * ve * 0.000001) // L/s approximation
 
-        // L/100km = (L/s * 100000m) / (m/s)
-        var consumption = (fuelLps * 100000.0) / speedMps
+        // Convert to L/100km  
+        val consumption = (fuelFlowLps * 3600.0 * 100.0) / speedKmh
 
         // Clamp to reasonable range
-        consumption = consumption.coerceIn(0.0, MAX_CONSUMPTION_CLAMP)
+        val clampedConsumption = consumption.coerceIn(0.0, MAX_CONSUMPTION_CLAMP)
 
-        // Store as last stable value
-        lastStableConsumption = consumption
-
-        return consumption
+        lastStableConsumption = clampedConsumption
+        return clampedConsumption
     }
 
-    /** Estimate horsepower from MAF and RPM Scaled to reach ~82 bhp at 6000 rpm */
-    fun calculateEstimatedHp(mafGps: Double?, rpm: Double?): Double? {
-        if (mafGps == null || rpm == null) return null
+    /**
+     * Estimate horsepower using speed-density approach
+     * Based on MAP, BARO, IAT, and RPM for 1.2L engine
+     */
+    fun calculateEstimatedHp(mapKpa: Double?, baroKpa: Double?, iatC: Double?, rpm: Double?): Double? {
+        if (mapKpa == null || baroKpa == null || iatC == null || rpm == null) return null
 
-        // Very rough HP estimation from MAF
-        // HP is roughly proportional to air mass flow
-        // At peak RPM with peak MAF, should give ~82 HP
+        // Convert IAT to Kelvin
+        val iatK = iatC + 273.15
 
-        // Normalize RPM (0-1 range at max RPM)
-        val rpmFactor = (rpm / MAX_RPM).coerceIn(0.0, 1.2)
+        // Air density correction relative to standard conditions
+        val densityCorrection = (mapKpa / STANDARD_PRESSURE_KPA) * (STANDARD_TEMP_K / iatK)
 
-        // Estimate from MAF (typical max MAF for this power ~200-250 g/s)
-        // Use empirical scaling
-        val basePower = mafGps * HP_MAF_MULTIPLIER
+        // Volumetric efficiency curve
+        val ve = calculateVolumetricEfficiency(rpm)
 
-        // Apply RPM factor (power increases with RPM)
-        val estimatedHp = basePower * rpmFactor
+        // Calculate theoretical airflow (simplified)
+        val airflow = (DISPLACEMENT_L * rpm * densityCorrection * ve) / (120.0 * 1.225)
 
-        // Clamp to reasonable range (0 to ~120% of max)
-        return estimatedHp.coerceIn(0.0, MAX_HP * 1.2)
+        // Estimate HP based on airflow and RPM
+        var hp = airflow * rpm * 0.0001 // Scaling factor
+
+        // Apply RPM-based scaling to match engine characteristics
+        val rpmFactor = (rpm / MAX_RPM).coerceAtMost(1.0)
+        hp *= rpmFactor * 1.5 // Adjust scaling for realistic output
+
+        // Clamp to engine limits
+        return hp.coerceIn(0.0, MAX_HP)
     }
 
-    /** Calculate all derived metrics at once */
+    /**
+     * Volumetric efficiency curve for small displacement engine
+     */
+    private fun calculateVolumetricEfficiency(rpm: Double): Double {
+        return when {
+            rpm < 1000 -> 0.6
+            rpm < 2000 -> 0.65 + (rpm - 1000) * 0.0001  // 0.65-0.75
+            rpm < 4000 -> 0.75 + (rpm - 2000) * 0.00005 // 0.75-0.85
+            rpm < 6000 -> 0.85 - (rpm - 4000) * 0.00005 // 0.85-0.75
+            else -> 0.75 - (rpm - 6000) * 0.0001        // declining after 6000
+        }
+    }
+
+    /** Calculate all derived metrics at once using speed-density approach */
     fun calculateAll(
             mapKpa: Double?,
             baroKpa: Double?,
-            mafGps: Double?,
+            iatC: Double?,
             speedKmh: Double?,
             rpm: Double?
     ): DerivedMetrics {
         return DerivedMetrics(
                 boostPsi = calculateBoost(mapKpa, baroKpa, rpm),
-                fuelConsumptionLPer100km = calculateFuelConsumption(mafGps, speedKmh),
-                estimatedHp = calculateEstimatedHp(mafGps, rpm)
+                fuelConsumptionLPer100km = calculateFuelConsumption(mapKpa, rpm, iatC, speedKmh),
+                estimatedHp = calculateEstimatedHp(mapKpa, baroKpa, iatC, rpm)
         )
     }
+
+    /** Reset calculator state */
+    fun reset() {
+        lastStableConsumption = null
+    }
+}
 
     /** Reset calculator state (e.g., on disconnect) */
     fun reset() {

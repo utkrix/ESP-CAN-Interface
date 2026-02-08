@@ -16,7 +16,7 @@ enum class ObdPid(
     VOLTAGE("0142", "Control Module Voltage", "V", UpdateGroup.SLOW),
     MAF("0110", "Mass Air Flow", "g/s", UpdateGroup.SLOW),
     BARO("0133", "Barometric Pressure", "kPa", UpdateGroup.SLOW),
-    OIL_TEMP("015C", "Engine Oil Temperature", "°C", UpdateGroup.SLOW);
+    AMBIENT_TEMP("0146", "Ambient Air Temperature", "°C", UpdateGroup.SLOW);
 
     /** Parse raw OBD response bytes to actual value */
     fun decode(bytes: List<Int>): Double? {
@@ -26,7 +26,7 @@ enum class ObdPid(
             when (this) {
                 RPM -> if (bytes.size >= 2) ((bytes[0] * 256.0) + bytes[1]) / 4.0 else null
                 SPEED -> bytes[0].toDouble()
-                COOLANT_TEMP, IAT, OIL_TEMP -> bytes[0] - 40.0
+                COOLANT_TEMP, IAT, AMBIENT_TEMP -> bytes[0] - 40.0
                 ENGINE_LOAD -> bytes[0] * 100.0 / 255.0
                 MAP, BARO -> bytes[0].toDouble()
                 VOLTAGE -> if (bytes.size >= 2) ((bytes[0] * 256.0) + bytes[1]) / 1000.0 else null
