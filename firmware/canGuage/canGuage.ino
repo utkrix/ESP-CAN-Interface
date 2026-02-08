@@ -26,8 +26,8 @@ bool blinkOn = true;
 uint32_t lastBlinkMs = 0;
 
 // gauge ui definitions
-GaugeUI g1a = {120, 62, 52, 40, 32, 2, NEEDLE_RED, NAN, M_COOLANT}; // tft1 top
-GaugeUI g1b = {120, 178, 52, 40, 32, 2, NEEDLE_YELLOW, NAN, M_IAT}; // tft1 bottom (Intake Air Temp)
+GaugeUI g1a = {120, 62, 52, 40, 32, 2, NEEDLE_RED, NAN, M_COOLANT};     // tft1 top
+GaugeUI g1b = {120, 178, 52, 40, 32, 2, NEEDLE_YELLOW, NAN, M_AMBIENT}; // tft1 bottom (Ambient Air Temp)
 
 GaugeUI g2a = {120, 62, 52, 40, 32, 2, NEEDLE_CYAN, NAN, M_VOLT};   // tft2 top
 GaugeUI g2b = {120, 178, 52, 40, 32, 2, NEEDLE_GREEN, NAN, M_LOAD}; // tft2 bottom
@@ -70,7 +70,7 @@ void drawPageBackgrounds()
     tft2.fillScreen(BG);
 
     drawMiniDial(tft1, g1a, "Coolant", DIAL_OFFSET_1, DIAL_MIRROR_1);
-    drawMiniDial(tft1, g1b, "IAT", DIAL_OFFSET_1, DIAL_MIRROR_1);
+    drawMiniDial(tft1, g1b, "Ambient", DIAL_OFFSET_1, DIAL_MIRROR_1);
     drawMiniDial(tft2, g2a, "Voltage", DIAL_OFFSET_2, DIAL_MIRROR_2);
     drawMiniDial(tft2, g2b, "Load", DIAL_OFFSET_2, DIAL_MIRROR_2);
   }
@@ -132,9 +132,9 @@ float getMetricValue(MetricId id, uint32_t nowMs)
       if (live.hasCoolant)
         return live.coolant;
       break;
-    case M_OIL:
-      if (live.hasOil)
-        return live.oil;
+    case M_AMBIENT:
+      if (live.hasAmbient)
+        return live.ambient;
       break;
     case M_VOLT:
       if (live.hasVolt)
@@ -164,6 +164,18 @@ float getMetricValue(MetricId id, uint32_t nowMs)
       if (live.hasRpm)
         return live.rpm;
       break;
+    case M_MAP:
+      if (live.hasMap)
+        return live.map;
+      break;
+    case M_BARO:
+      if (live.hasBaro)
+        return live.baro;
+      break;
+    case M_SPEED:
+      if (live.hasSpeed)
+        return live.speed;
+      break;
     }
   }
 
@@ -172,8 +184,8 @@ float getMetricValue(MetricId id, uint32_t nowMs)
   {
   case M_COOLANT:
     return 60 + ease * 45;
-  case M_OIL:
-    return 70 + ease * 55;
+  case M_AMBIENT:
+    return 15 + ease * 25; // Ambient air temp demo
   case M_VOLT:
     return 12.2 + ease * 1.3;
   case M_LOAD:
@@ -183,11 +195,20 @@ float getMetricValue(MetricId id, uint32_t nowMs)
   case M_BOOST_PSI:
     return boost_psi;
   case M_LPER100:
+    // Check if speed is available for realistic demo
+    if (live.hasSpeed && live.speed < 3.0f)
+      return NAN;
     return 4 + ease * 18;
   case M_HP:
     return ease * 82;
   case M_RPM:
     return 800 + ease * 5200;
+  case M_MAP:
+    return 35 + ease * 160; // Demo MAP values
+  case M_BARO:
+    return 101.3f; // Standard atmospheric pressure
+  case M_SPEED:
+    return ease * 90; // Demo speed
   }
   return 0;
 }
@@ -298,7 +319,7 @@ void loop()
   if (page == 0)
   {
     updateGauge(tft1, g1a, getMetricValue(M_COOLANT, now), DIAL_OFFSET_1, DIAL_MIRROR_1);
-    updateGauge(tft1, g1b, getMetricValue(M_IAT, now), DIAL_OFFSET_1, DIAL_MIRROR_1);
+    updateGauge(tft1, g1b, getMetricValue(M_AMBIENT, now), DIAL_OFFSET_1, DIAL_MIRROR_1);
     updateGauge(tft2, g2a, getMetricValue(M_VOLT, now), DIAL_OFFSET_2, DIAL_MIRROR_2);
     updateGauge(tft2, g2b, getMetricValue(M_LOAD, now), DIAL_OFFSET_2, DIAL_MIRROR_2);
   }

@@ -207,7 +207,13 @@ void drawTextMetricFixed(Adafruit_GC9A01A &tft, int x, int y, MetricId id, float
     tft.setCursor(vx, vy);
 
     char buf[32];
-    if (id == M_VOLT || id == M_LPER100)
+
+    // Handle special case for fuel consumption when speed is too low
+    if (isnan(v) && id == M_LPER100)
+    {
+        snprintf(buf, sizeof(buf), " --.- %-6s", specs[id].unit);
+    }
+    else if (id == M_VOLT || id == M_LPER100)
     {
         snprintf(buf, sizeof(buf), "%4.1f %-6s", v, specs[id].unit);
     }
